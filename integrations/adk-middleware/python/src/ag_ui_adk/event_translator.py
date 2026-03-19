@@ -59,8 +59,8 @@ def _check_thought_support() -> bool:
         _THOUGHT_SUPPORT_CHECKED = True
     return _HAS_THOUGHT_SUPPORT
 
-def _coerce_tool_response(value: Any, _visited: Optional[set[int]] = None) -> Any:
-    """Recursively convert arbitrary tool responses into JSON-serializable structures."""
+def _coerce_to_jsonable(value: Any, _visited: Optional[set[int]] = None) -> Any:
+    """Recursively convert arbitrary objects into JSON-serializable structures."""
 
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
@@ -82,14 +82,14 @@ def _coerce_tool_response(value: Any, _visited: Optional[set[int]] = None) -> An
     try:
         if dataclasses.is_dataclass(value) and not isinstance(value, type):
             return {
-                field.name: _coerce_tool_response(getattr(value, field.name), _visited)
+                field.name: _coerce_to_jsonable(getattr(value, field.name), _visited)
                 for field in dataclasses.fields(value)
             }
 
         if hasattr(value, "_asdict") and callable(getattr(value, "_asdict")):
             try:
                 return {
-                    str(k): _coerce_tool_response(v, _visited)
+                    str(k): _coerce_to_jsonable(v, _visited)
                     for k, v in value._asdict().items()  # type: ignore[attr-defined]
                 }
             except Exception:
@@ -108,20 +108,20 @@ def _coerce_tool_response(value: Any, _visited: Optional[set[int]] = None) -> An
                 except Exception:
                     continue
 
-                return _coerce_tool_response(dumped, _visited)
+                return _coerce_to_jsonable(dumped, _visited)
 
         if isinstance(value, Mapping):
             return {
-                str(k): _coerce_tool_response(v, _visited)
+                str(k): _coerce_to_jsonable(v, _visited)
                 for k, v in value.items()
             }
 
         if isinstance(value, (list, tuple, set, frozenset)):
-            return [_coerce_tool_response(item, _visited) for item in value]
+            return [_coerce_to_jsonable(item, _visited) for item in value]
 
         if isinstance(value, Iterable):
             try:
-                return [_coerce_tool_response(item, _visited) for item in list(value)]
+                return [_coerce_to_jsonable(item, _visited) for item in list(value)]
             except TypeError:
                 pass
 
@@ -132,7 +132,7 @@ def _coerce_tool_response(value: Any, _visited: Optional[set[int]] = None) -> An
 
         if obj_vars:
             coerced = {
-                key: _coerce_tool_response(val, _visited)
+                key: _coerce_to_jsonable(val, _visited)
                 for key, val in obj_vars.items()
                 if not key.startswith("_")
             }
@@ -147,7 +147,7 @@ def _serialize_tool_response(response: Any) -> str:
     """Serialize a tool response into a JSON string."""
 
     try:
-        coerced = _coerce_tool_response(response)
+        coerced = _coerce_to_jsonable(response)
         return json.dumps(coerced, ensure_ascii=False)
     except Exception as exc:
         logger.warning("Failed to coerce tool response to JSON: %s", exc, exc_info=True)
@@ -760,7 +760,7 @@ class EventTranslator:
                         if hasattr(long_running_function_call, 'args') and long_running_function_call.args:
                             # Convert args to string (JSON format), coercing non-serializable objects (e.g. enums)
                             import json
-                            coerced_args = _coerce_tool_response(long_running_function_call.args) if isinstance(long_running_function_call.args, dict) else long_running_function_call.args
+                            coerced_args = _coerce_to_jsonable(long_running_function_call.args) if isinstance(long_running_function_call.args, dict) else long_running_function_call.args
                             args_str = json.dumps(coerced_args) if isinstance(coerced_args, (dict, list)) else str(coerced_args)
                             yield ToolCallArgsEvent(
                                 type=EventType.TOOL_CALL_ARGS,
@@ -838,7 +838,7 @@ class EventTranslator:
             # Emit TOOL_CALL_ARGS if we have arguments
             if hasattr(func_call, 'args') and func_call.args:
                 # Convert args to string (JSON format), coercing non-serializable objects (e.g. enums)
-                coerced_args = _coerce_tool_response(func_call.args) if isinstance(func_call.args, dict) else func_call.args
+                coerced_args = _coerce_to_jsonable(func_call.args) if isinstance(func_call.args, dict) else func_call.args
                 args_str = json.dumps(coerced_args) if isinstance(coerced_args, (dict, list)) else str(coerced_args)
 
                 yield ToolCallArgsEvent(
@@ -1197,7 +1197,7 @@ def _translate_function_calls_to_tool_calls(function_calls: List[Any]) -> List[T
             type="function",
             function=FunctionCall(
                 name=fc.name,
-                arguments=json.dumps(_coerce_tool_response(fc.args)) if hasattr(fc, 'args') and fc.args else "{}"
+                arguments=json.dumps(_coerce_to_jsonable(fc.args)) if hasattr(fc, 'args') and fc.args else "{}"
             )
         )
         tool_calls.append(tool_call)
