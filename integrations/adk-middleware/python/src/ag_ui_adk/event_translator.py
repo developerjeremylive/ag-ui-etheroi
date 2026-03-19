@@ -758,9 +758,10 @@ class EventTranslator:
                             parent_message_id=None
                         )
                         if hasattr(long_running_function_call, 'args') and long_running_function_call.args:
-                            # Convert args to string (JSON format)
+                            # Convert args to string (JSON format), coercing non-serializable objects (e.g. enums)
                             import json
-                            args_str = json.dumps(long_running_function_call.args) if isinstance(long_running_function_call.args, dict) else str(long_running_function_call.args)
+                            coerced_args = _coerce_tool_response(long_running_function_call.args) if isinstance(long_running_function_call.args, dict) else long_running_function_call.args
+                            args_str = json.dumps(coerced_args) if isinstance(coerced_args, (dict, list)) else str(coerced_args)
                             yield ToolCallArgsEvent(
                                 type=EventType.TOOL_CALL_ARGS,
                                 tool_call_id=long_running_function_call.id,
@@ -836,8 +837,9 @@ class EventTranslator:
 
             # Emit TOOL_CALL_ARGS if we have arguments
             if hasattr(func_call, 'args') and func_call.args:
-                # Convert args to string (JSON format)
-                args_str = json.dumps(func_call.args) if isinstance(func_call.args, dict) else str(func_call.args)
+                # Convert args to string (JSON format), coercing non-serializable objects (e.g. enums)
+                coerced_args = _coerce_tool_response(func_call.args) if isinstance(func_call.args, dict) else func_call.args
+                args_str = json.dumps(coerced_args) if isinstance(coerced_args, (dict, list)) else str(coerced_args)
 
                 yield ToolCallArgsEvent(
                     type=EventType.TOOL_CALL_ARGS,
@@ -1195,7 +1197,7 @@ def _translate_function_calls_to_tool_calls(function_calls: List[Any]) -> List[T
             type="function",
             function=FunctionCall(
                 name=fc.name,
-                arguments=json.dumps(fc.args) if hasattr(fc, 'args') and fc.args else "{}"
+                arguments=json.dumps(_coerce_tool_response(fc.args)) if hasattr(fc, 'args') and fc.args else "{}"
             )
         )
         tool_calls.append(tool_call)
