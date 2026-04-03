@@ -78,7 +78,12 @@ class StrandsAgent:
         if hasattr(agent, "agent_id") and agent.agent_id:
             self._agent_kwargs["agent_id"] = agent.agent_id
         if hasattr(agent, "state") and agent.state is not None:
-            self._agent_kwargs["state"] = dict(agent.state)
+            state = agent.state
+            if hasattr(state, "get") and callable(state.get):
+                # JSONSerializableDict — use .get() for the full data dict
+                self._agent_kwargs["state"] = state.get()
+            else:
+                self._agent_kwargs["state"] = state
 
         self.name = name
         self.description = description
