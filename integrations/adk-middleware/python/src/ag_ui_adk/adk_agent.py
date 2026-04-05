@@ -1650,7 +1650,12 @@ class ADKAgent:
 
         def _update_agent_tools_recursive(agent: Any) -> None:
             """
-            Recursively replace AGUIToolset with ClientProxyToolset for an agent and its sub-agents.
+            Bind ClientProxyToolset to AGUIToolset placeholders for an agent and its sub-agents.
+
+            Uses bind() instead of list replacement so that the same AGUIToolset
+            object stays in the agent's tools list.  This is forwards-compatible
+            with ADK 2.0 which may cache toolset references during Runner init.
+
             Args:
                 agent: Agent instance to process
             """
@@ -1658,9 +1663,8 @@ class ADKAgent:
             logger.info(f"[TOOL_SETUP] Processing agent: {agent.name} (type: {type(agent).__name__})")
 
             if isinstance(agent, LlmAgent) and hasattr(agent, "tools"):
-                new_tools: list[ToolUnion] = []
                 original_tool_count = len(agent.tools) if agent.tools else 0
-                logger.info(f"[TOOL_SETUP] Agent {agent.name} has {original_tool_count} tools before replacement")
+                logger.info(f"[TOOL_SETUP] Agent {agent.name} has {original_tool_count} tools")
 
                 for tool in agent.tools:
                     if isinstance(tool, AGUIToolset):
@@ -1673,14 +1677,10 @@ class ADKAgent:
                             predict_state=self._predict_state,
                         )
                         client_proxy_toolsets.append(proxy_toolset)
-                        tool = proxy_toolset
+                        tool.bind(proxy_toolset)
                         logger.info(
-                            f"[TOOL_SETUP] Replaced AGUIToolset with ClientProxyToolset for agent {agent.name}"
+                            f"[TOOL_SETUP] Bound ClientProxyToolset to AGUIToolset for agent {agent.name}"
                         )
-                    new_tools.append(tool)
-
-                agent.tools = new_tools
-                logger.info(f"[TOOL_SETUP] Agent {agent.name} now has {len(new_tools)} tools after replacement")
 
             # Recursively process sub-agents if they exist
             # This handles SequentialAgent, LoopAgent, and other composite agents
