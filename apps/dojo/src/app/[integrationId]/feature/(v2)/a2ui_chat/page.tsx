@@ -8,9 +8,12 @@ import {
   CopilotKitProvider,
   useConfigureSuggestions,
 } from "@copilotkit/react-core/v2";
+import { createA2UIMessageRenderer } from "@copilotkit/a2ui-renderer";
 import { theme } from "./theme";
 
 export const dynamic = "force-dynamic";
+
+const activityRenderers = [createA2UIMessageRenderer({ theme })];
 
 interface PageProps {
   params: Promise<{
@@ -47,7 +50,7 @@ export default function Page({ params }: PageProps) {
       key={agentId}
       runtimeUrl={`/api/copilotkitnext/${integrationId}`}
       showDevConsole="auto"
-      a2ui={{ theme }}
+      renderActivityMessages={activityRenderers}
     >
       <div className="a2ui-chat-container flex flex-col h-full overflow-hidden">
         {showToggle && (
